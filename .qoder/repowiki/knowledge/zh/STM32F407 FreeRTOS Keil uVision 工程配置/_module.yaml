@@ -1,0 +1,14 @@
+schema_version: 1
+module_path: ""
+title: STM32F407 FreeRTOS Keil uVision 工程配置
+scope:
+    - DebugConfig/
+    - f407_freeRTOS.uvguix.23887
+    - f407_freeRTOS.uvguix.Administrator
+    - f407_freeRTOS.uvguix.智能设备
+    - f407_freeRTOS.uvoptx
+    - f407_freeRTOS.uvprojx
+    - _delay_new.c.tmp
+source_files: []
+depends_on: []
+related_to: []

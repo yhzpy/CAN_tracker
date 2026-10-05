@@ -1,0 +1,22 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-10-05T12:02:04Z"
+modules:
+    "":
+        dir_name: STM32F407 FreeRTOS Keil uVision 工程配置
+        title: STM32F407 FreeRTOS Keil uVision 工程配置
+        scope:
+            - DebugConfig/
+            - f407_freeRTOS.uvguix.23887
+            - f407_freeRTOS.uvguix.Administrator
+            - f407_freeRTOS.uvguix.智能设备
+            - f407_freeRTOS.uvoptx
+            - f407_freeRTOS.uvprojx
+            - _delay_new.c.tmp
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
