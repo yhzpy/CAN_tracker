@@ -1,0 +1,80 @@
+#include "delay.h"
+#include "sys.h"
+#if SYS_SUPPORT_OS
+#include "FreeRTOS.h"						  
+#include "task.h" 
+#endif
+
+static u8  fac_us=0;									   
+static u16 fac_ms=0;						
+ 
+ 
+extern void xPortSysTickHandler(void);
+
+void SysTick_Handler(void)
+{	
+    if(xTaskGetSchedulerState()!=taskSCHEDULER_NOT_STARTED)
+    {
+        xPortSysTickHandler();	
+    }
+}
+			   
+void delay_init()
+{
+	u32 reload;
+	SysTick_CLKSourceConfig(SysTick_CLKSource_HCLK);
+	fac_us=SystemCoreClock/1000000;				
+	reload=SystemCoreClock/1000000;				
+	reload*=1000000/configTICK_RATE_HZ;		
+												
+	fac_ms=1000/configTICK_RATE_HZ;			
+
+	SysTick->CTRL|=SysTick_CTRL_TICKINT_Msk;  
+	SysTick->LOAD=reload; 						
+	SysTick->CTRL|=SysTick_CTRL_ENABLE_Msk;   	   
+}								    
+
+								   
+void delay_us(u32 nus)
+{		
+	u32 ticks;
+	u32 told,tnow,tcnt=0;
+	u32 reload=SysTick->LOAD;				   	 
+	ticks=nus*fac_us; 						
+	told=SysTick->VAL;        				
+	while(1)
+	{
+		tnow=SysTick->VAL;	
+		if(tnow!=told)
+		{	    
+			if(tnow<told)tcnt+=told-tnow;	//??????????SYSTICK??????????????????????.
+			else tcnt+=reload-tnow+told;	    
+			told=tnow;
+			if(tcnt>=ticks)break;			//?????/????????????,?????.
+		}  
+	};										    
+}  
+//???nms
+//nms:??????ms??
+//nms:0~65535
+void delay_ms(u32 nms)
+{	
+	if(xTaskGetSchedulerState()!=taskSCHEDULER_NOT_STARTED)//?????????
+	{		
+		if(nms>=fac_ms)						//???????????OS????????????? 
+		{ 
+   			vTaskDelay(nms/fac_ms);	 		//FreeRTOS???
+		}
+		nms%=fac_ms;						//OS???????????§³???????,?????????????    
+	}
+	delay_us((u32)(nms*1000));				//?????????
+}
+
+//???nms,???????????????
+//nms:??????ms??
+void delay_xms(u32 nms)
+{
+	u32 i;
+	for(i=0;i<nms;i++) delay_us(1000);
+}
+
