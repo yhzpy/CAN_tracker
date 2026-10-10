@@ -1,0 +1,23 @@
+# Keil MDK build outputs
+Output/
+Listings/
+Objects/
+*.o
+*.d
+*.crf
+*.axf
+*.hex
+*.lnp
+*.map
+*.htm
+*.dep
+*.lst
+*.bak
+*.orig
+*.tmp
+
+# Keil per-user GUI layout
+*.uvguix.*
+
+# IDE logs
+.vscode/*.log
