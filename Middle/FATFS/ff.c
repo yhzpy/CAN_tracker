@@ -3816,9 +3816,13 @@ FRESULT f_open (
 
 	/* Get logical drive number and mount the volume if needed */
 	mode &= FF_FS_READONLY ? FA_READ : FA_READ | FA_WRITE | FA_CREATE_ALWAYS | FA_CREATE_NEW | FA_OPEN_ALWAYS | FA_OPEN_APPEND;
+/*mount_volume 是 FatFs 内部真正干活的挂载子程序——初始化 SD 卡硬件 + 读引导扇区 + 解析 BPB。它被 f_mount 和 f_open 共用，
+是因为 FatFs 的设计是"每个文件 API 入口都先确保卷已挂载"，而 mount_volume 是带幂等检查的公共入口。
+此函数一进去就会检查卷是否已挂载，已挂载则直接返回，从而实现幂等性。*/
 	res = mount_volume(&path, &fs, mode);
 
 	if (res == FR_OK) {
+		/*建立"文件属于哪个卷"的指针关联（引用而非拷贝），让所有文件操作能共享卷级信息*/
 		fp->obj.fs = fs;
 		dj.obj.fs = fs;
 		INIT_NAMEBUFF(fs);

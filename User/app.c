@@ -46,7 +46,10 @@ extern QueueHandle_t lcd_display_queue;//lcd接收队列
       } else {
           strcpy(filename, "0:/BMS_log_default.csv");
       }
-
+/*二值信号量、计数信号量、互斥锁三种，take/give 用的都是同一对函数 xSemaphoreTake / xSemaphoreGive，唯一例外是递归互斥锁*/
+/*give 的持有者限制：互斥锁必须由 take 成功的那个任务来 give（内部会检查持有者），乱给会触发断言；二值/计数信号量则无此限制。
+ISR 中只能 give 不能 take：take 会阻塞任务，中断里没有"任务"可阻塞，所以只有 xSemaphoreGiveFromISR，没有 xSemaphoreTakeFromISR。
+*/
       if (xSemaphoreTake(xSDCardMutex, portMAX_DELAY) == pdTRUE) {
           res = f_open(fil, filename, FA_OPEN_APPEND | FA_WRITE);
 
@@ -335,7 +338,7 @@ void SDCard_WriteTask(void *pvParameters) {
 				TickType_t wait_time = (elapsed >= pdMS_TO_TICKS(WRITE_TIMEOUT_MS))
 															 ? 0
 															 : pdMS_TO_TICKS(WRITE_TIMEOUT_MS) - elapsed;
-
+                /*超过60000tick（1分钟）就不阻塞直接返回*/
 				if (xQueueReceive(xSDCardWriteQueue, &sd_data, wait_time) == pdPASS) {
 						// 收到新数据
 						uint16_t data_len = strlen(sd_data.log_buffer);
