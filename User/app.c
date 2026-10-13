@@ -218,7 +218,11 @@ void BMS27930_RecordTask(void *pvParameters)
 	 while (1) {
 			 // 接收CAN报文，超时时间100ms
 			 len = can1_receive_msg(&extId, buf, 100);		 
-
+/*typedef struct {
+    uint32_t extId;     // 29位扩展ID，如 0x181056F4
+    uint8_t  data[8];   // 8字节数据场（负载）
+    uint8_t  dlc;       // 实际长度（0~8）
+} Can1RxFrame;*/   /*STM32 CAN 外设的 ISR 已经剥掉了 CRC/ACK/SOF/EOF 这些链路层字段*/
 			 if (len > 0) {		 
 				 
 					 // 获取时间戳
@@ -228,7 +232,7 @@ void BMS27930_RecordTask(void *pvParameters)
 					 uint8_t is_same = (extId == last_extId) && (len == last_len);
 					 if (is_same) {
 							 for (uint8_t i = 0; i < len; i++) {
-									 if (buf[i] != last_data[i]) {
+									 if (buf[i] != last_data[i]) {/*逐个元素对比数据帧是否一样*/
 											 is_same = 0;
 											 break;
 									 }
@@ -237,10 +241,12 @@ void BMS27930_RecordTask(void *pvParameters)
 
 					 if (is_same) {
 							 // 相同报文，只记录原始数据
+                             //最后三个变量就和printf一样  前面%%  后面填参数
 							 sprintf(sd_data.log_buffer, "%s,%08X,", timestamp, (unsigned int)extId);
 							 for (uint8_t i = 0; i < len; i++) {
 									 sprintf(sd_data.log_buffer + strlen(sd_data.log_buffer), "%02X%s", buf[i], (i < len - 1) ? " " :"");
 								}
+                                /*把 src 字符串追加到 dest 末尾（覆盖 dest 原来的 \0，然后从那里开始拷贝，最后补一个新的 \0）。*/
 							 strcat(sd_data.log_buffer, "\r\n");
 							 }
 						else {

@@ -12,7 +12,8 @@
 #define LONG_PRESS_TICKS    (800  / TASK_PERIOD_MS)   // 800ms = 40个周期
 #define DOUBLE_CLICK_TICKS  (300  / TASK_PERIOD_MS)   // 300ms = 15个周期
 
-
+/*typedef 后面的枚举 tag 名可有可无：省略它 = 只暴露一个别名，代码更干净；
+保留它 = 多一条 enum a 的引用路径，几乎用不到。日常写 typedef enum {} b; 就够了。*/
 typedef enum {
 		KEY_STATE_IDLE,             // 等待按下
 		KEY_STATE_PRESSED,          // 已按下，计时中

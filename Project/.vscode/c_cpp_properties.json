@@ -2,6 +2,7 @@
     "configurations": [
         {
             "name": "F407_freeRTOS",
+            "cStandard": "c99",
             "includePath": [
                 "e:\\stm32Demos\\CAN_Tracker\\Driver\\BSP",
                 "e:\\stm32Demos\\CAN_Tracker\\Driver\\CMSIS",
@@ -21,11 +22,20 @@
                 "e:\\stm32Demos\\CAN_Tracker\\Middle\\FreeRTOS",
                 "e:\\stm32Demos\\CAN_Tracker\\Middle\\FreeRTOS\\portable\\MemMang"
             ],
+            "browse": {
+                "path": [
+                    "e:\\stm32Demos\\CAN_Tracker\\User",
+                    "e:\\stm32Demos\\CAN_Tracker\\Driver",
+                    "e:\\stm32Demos\\CAN_Tracker\\Middle"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
             "defines": [
                 "STM32F40_41xxx",
                 "USE_STDPERIPH_DRIVER",
                 "__CC_ARM",
                 "__arm__",
+                "_ARMABI=",
                 "__align(x)=",
                 "__ALIGNOF__(x)=",
                 "__alignof__(x)=",
