@@ -35,7 +35,6 @@
                 "USE_STDPERIPH_DRIVER",
                 "__CC_ARM",
                 "__arm__",
-                "_ARMABI=",
                 "__align(x)=",
                 "__ALIGNOF__(x)=",
                 "__alignof__(x)=",

@@ -241,7 +241,8 @@ void BMS27930_RecordTask(void *pvParameters)
 
 					 if (is_same) {
 							 // 相同报文，只记录原始数据
-                             //最后三个变量就和printf一样  前面%%  后面填参数
+                             //最后三个变量就和printf一样  前面%%  后面填参数  
+                             // %08X  0代表填充  8代表输出8位  X代表输出为大写十六进制 4位一个16进制  uint8 8位就需要2个16进制 所以%02X
 							 sprintf(sd_data.log_buffer, "%s,%08X,", timestamp, (unsigned int)extId);
 							 for (uint8_t i = 0; i < len; i++) {
 									 sprintf(sd_data.log_buffer + strlen(sd_data.log_buffer), "%02X%s", buf[i], (i < len - 1) ? " " :"");

@@ -795,11 +795,11 @@ static SD_Error sdmmc_write_blocks(uint8_t *pbuf, long long addr, uint16_t blksi
             (STD_CAPACITY_SD_CARD_V2_0 == CardType) || 
             (HIGH_CAPACITY_SD_CARD == CardType))
         {
-            sdmmc_send_cmd(SD_CMD_APP_CMD, 1, (uint32_t)RCA << 16); /* 发送ACMD55,短响应 */
+            sdmmc_send_cmd(SD_CMD_APP_CMD, 1, (uint32_t)RCA << 16); /* 发送CMD55,短响应 */
             errorstatus = sdmmc_cmd_resp1_error(SD_CMD_APP_CMD); 		/* 等待R1响应 */
             if (errorstatus != SD_OK) return errorstatus;
 
-            sdmmc_send_cmd(SD_CMD_SET_BLOCK_COUNT, 1, nblks);   /* 发送CMD23,设置块数量,短响应 */
+            sdmmc_send_cmd(SD_CMD_SET_BLOCK_COUNT, 1, nblks);   /* 发送ACMD23,设置块数量,短响应 */
             errorstatus = sdmmc_cmd_resp1_error(SD_CMD_SET_BLOCK_COUNT); /* 等待R1响应 */
             if (errorstatus != SD_OK) return errorstatus;
         }
@@ -838,7 +838,7 @@ static SD_Error sdmmc_write_blocks(uint8_t *pbuf, long long addr, uint16_t blksi
     g_sdio_transfer_error = 0;
     g_sdio_error = SD_OK;
     g_sdio_nblks = nblks;
-    
+// 写操作里主机是"数据发送方",卡是"接收方",所以必须先把命令发出去、确认卡已进入等待接收状态,再打开 DMA/DPSM 开始灌数据。   
     /* 配置DMA - 写操作：内存到外设 */
     sdmmc_dma_config((uint32_t *)pbuf, nblks * blksize, 0);
     
@@ -1441,7 +1441,8 @@ uint8_t sd_read_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 
     return sta;
 }
-
+//sd_read_disk / sd_write_disk 是 FatFs 的底层磁盘接口,会被多个任务并发调用:FatFs 文件系统任务在写日志;Ymodem/USB 下载任务在读卡导出文件。
+//这两个任务如果同时进 sdmmc_read_blocks,会一起操作同一套 SDIO 寄存器和同一批全局状态()
 /**
  * @brief       写SD卡(fatfs/usb调用)
  * @param       pbuf  : 数据缓存区
@@ -1450,7 +1451,7 @@ uint8_t sd_read_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
  * @retval      0, 正常;  其他, 错误代码
  */
 /*互斥锁作用：SD 卡是串行设备——同一时刻只能有一个传输在进行（SDIO 硬件状态机、DMA 流都是单份的）。而系统里至少有两个任务会访问它：
-  SDCard_WriteTask：写日志 CSV 文件（经 FatFs）
+  SDCard_WriteTask：写日志 CSV 文件（经 FatFs）忙等
   Ymodem_Task：读日志文件导出（经 FatFs）*/
 uint8_t sd_write_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 {
@@ -1472,4 +1473,31 @@ uint8_t sd_write_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 
     return sta;
 }
+
+/*互斥锁不阻止别人"调用"函数,而是让没拿到锁的调用者阻塞在 xSemaphoreTake 那一行睡下去,直到持锁者 Give 才被内核唤醒继续。
+ 原理就是内核把等待任务的 TCB 从就绪队列挪到锁的等待队列、状态置为 Blocked 并触发调度,让出 CPU;释放时再从等待队列挪回就绪队列。
+ 这样同一时刻只有一个任务能真正进入 sdmmc_write_blocks 操作 SD 卡硬件。
+
+
+ 二值信号量的 take 语义:xSemaphoreTake(g_sdio_transfer_sem, timeout);信号量此刻有值(=1) → 立刻拿到,值清 0,继续跑;
+ 信号量此刻为空(=0) → 任务阻塞,内核把它的 TCB 移进这个信号量的等待队列,状态 Blocked,让出 CPU。
+ 这套挂起/唤醒的底层动作和互斥锁是同一套内核机制,没有区别。
+ 区别只在"谁来 give"(锁是持有者任务 give,信号量是 ISR give)和有没有归属权/优先级继承。
+
+ 二值信号量初值为0  互斥锁初值为1
+ 所以二值信号量第一次take任务就会阻塞 等待别人通知他条件完成了 他才继续 同时他也有保护资源作用
+
+ 自旋锁(spinlock)就是"占着 CPU 空转"。它的等待方式是一个死循环反复检查锁有没有被释放:
+ while (lock_is_held) {     什么都不做,继续查 —— 这就是"自旋"   }
+ 拿不到锁时,它不睡眠、不让出 CPU,就在这循环里烧 CPU 周期。这和你前面看到的互斥锁/信号量正好相反:自旋锁互斥锁/
+ 信号量(阻塞型)拿不到锁时原地循环空转,占着 CPU任务挂起(Blocked),
+ 让出 CPU适合场景锁持有时间极短(几条指令)锁持有时间长(如等一次 DMA 传输)开销忙等浪费 CPU,但无切换开销有上下文切换开销,但不浪费 CPU补充一个细节
+ :现代自旋锁实现里常插一条 PAUSE/cpu_relax() 之类的提示指令,降低功耗和总线争用,但那只是优化,本质仍是占着 CPU 不放,不是让出。
+ 2. RTOS 有没有自旋锁?要分单核还是多核你这个项目(单核 Cortex-M4 + 经典 FreeRTOS):没有自旋锁,也不该用
+ 经典 FreeRTOS(非 SMP 版)不提供自旋锁 API。
+ 原因很硬核——单核上用自旋锁可能直接死锁:
+ 就一个cpu自旋 其他任务就死了 没人去满足他的条件
+*/
+
+
 

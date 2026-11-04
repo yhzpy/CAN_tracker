@@ -133,8 +133,8 @@ void USART1_Init(uint32_t baudrate) {
     // 5. 配置DMA接收（DMA2 Stream5, Channel4）
     DMA_DeInit(DMA2_Stream5);
     DMA_InitStruct.DMA_Channel = DMA_Channel_4;
-    DMA_InitStruct.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DR;
-    DMA_InitStruct.DMA_Memory0BaseAddr = (uint32_t)dma_rx_buffer;
+    DMA_InitStruct.DMA_PeripheralBaseAddr = (uint32_t)&USART1->DR;/*外设地址*/
+    DMA_InitStruct.DMA_Memory0BaseAddr = (uint32_t)dma_rx_buffer;/** 接收缓冲区地址  数组*/
     DMA_InitStruct.DMA_DIR = DMA_DIR_PeripheralToMemory;
     DMA_InitStruct.DMA_BufferSize = DMA_RX_BUFFER_SIZE;
     DMA_InitStruct.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
@@ -148,22 +148,40 @@ void USART1_Init(uint32_t baudrate) {
     DMA_InitStruct.DMA_MemoryBurst = DMA_MemoryBurst_Single;
     DMA_InitStruct.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;
     DMA_Init(DMA2_Stream5, &DMA_InitStruct);
-
+    //DR = Data Register（数据寄存器），是 USART1 外设的一个 32 位寄存器（地址 0x40011004），但它实际上是两个寄存器共用一个地址：
+    //RXNE = Read Data Register Not Empty，位于 USART1->SR（状态寄存器）的 bit 5。  通知DR里面有数据
+    //如果开了RXNE中断  就触发中断函数   如果开了DMA  就会向DMA发请求通知来读取DR里面的数据
     // 6. 使能USART1 DMA接收
+    //USART1_RX  ──── DMA2, Stream5, Channel4 内部固定布线 
+    //USART1 收到 1 字节 → 写入 DR 寄存器 → RXNE 置位   DMAR=1 时，RXNE 不再只触发中断，而是同时向 DMA 控制器发出一个"DMA 请求"
+    //DMA2_Stream5 收到请求 → 从 USART1->DR 读 1 字节 → 写入 dma_rx_buffer[偏移] → 偏移+1, NDTR-1
+    // RXNE 被自动清除（因为 DR 被读走了）
     USART_DMACmd(USART1, USART_DMAReq_Rx, ENABLE);
     DMA_Cmd(DMA2_Stream5, ENABLE);
 
     // 7. 配置空闲中断
-    USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);
-    NVIC_InitStruct.NVIC_IRQChannel = USART1_IRQn;
+    //在芯片内部，中断线就是真实的金属导线（硅片上的布线），连接外设和 NVIC 控制器。
+    //中断线工作流程  USART1 收到数据 → DR 写入完成 → RXNE/IDLE 标志置位
+    //  -->  USART1 的 CR1 寄存器中对应中断使能位 = 1 时，中断线被使能  
+    //-->  USART1 硬件把第 37 号中断线拉高（电平从 0→1）
+    //NVIC每个时钟周期都在扫描所有中断线的电平状态  检测到37号中断线被拉高 再查到这条线被使能  然后触发中断
+    USART_ITConfig(USART1, USART_IT_IDLE, ENABLE);//让 USART1 在 IDLE 事件时有资格拉高第 37 号线
+    NVIC_InitStruct.NVIC_IRQChannel = USART1_IRQn;//意思就是这条中断线（物理意义） 优先级如何  是否允许触发中断  不然扫描到了高电平也不行
     NVIC_InitStruct.NVIC_IRQChannelPreemptionPriority = 6;
     NVIC_InitStruct.NVIC_IRQChannelSubPriority = 0;
-    NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;
+    NVIC_InitStruct.NVIC_IRQChannelCmd = ENABLE;//在 NVIC 的 ISER 寄存器中打开这条线的门禁 这样才能触发中断
     NVIC_Init(&NVIC_InitStruct);
-
+    //当空闲时 idle置位 然后uart拉高那条中断线 nvic检查到高电平和iser置位了 说明可以触发中断 
+    //拉高中断线电平是串口行为  而nvic检测iser能不能触发中断 是nvic的行为
     // 8. 使能USART1
     USART_Cmd(USART1, ENABLE);
 }
+// ┌──────────────────────────┐         ┌──────────────────────────┐
+// │ 第一步：源端开关         │         │ 第二步：NVIC 开关        │
+// │ (要不要"拉高"这根线)     │ ──线──► │ (要不要"响应"这根线)     │
+// └──────────────────────────┘         └──────────────────────────┘
+//    由"源"自己的寄存器管                    由 NVIC 的寄存器管
+//    来源可以是uart也可以是exti  exti扫描的是gpio边沿  nvic只检测中断线高低电平不看边沿  二者不在一个层面  exti和外设是一个层面的东西
  /**
  * @brief 将ASCII十六进制字符转换为数值
  * @param c ASCII字符 ('0'-'9', 'A'-'F', 'a'-'f')
