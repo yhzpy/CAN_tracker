@@ -228,9 +228,17 @@ void CAN1_RX0_IRQHandler(void)/*名字在中断向量表 中断发生时 cpu根�
         // 清除中断挂起标志（必须清除，否则会重复进入）
         CAN_ClearITPendingBit(CAN1, CAN_IT_FMP0);
 
-        // 如果有更高优先级任务被唤醒，请求任务切换
+        // 如果有更高优先级任务被唤醒，请求任务切换  而不是回到之前被打断的那个任务
         portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
     }
+ //初始值 = pdFALSE
+//         ↓
+// xQueueSendFromISR() 内部检查：
+//   有没有高优先级任务在等这个队列？
+//     有，且被唤醒了 → 改为 pdTRUE
+//     没有 / 唤醒了同级或更低级 → 保持 pdFALSE
+//         ↓
+// portYIELD_FROM_ISR(最终值)
 }
 
 /* ====================================================================================
