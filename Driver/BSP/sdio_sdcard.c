@@ -1429,7 +1429,11 @@ uint8_t sd_read_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 					return SD_ERROR;
 			}
 
-    if (CardType != STD_CAPACITY_SD_CARD_V1_1) lsaddr <<= 9;
+    /* FatFs 传入 LBA 扇区号，统一左移 9 位(×512)换算成字节地址；
+       下层 sdmmc_read_blocks 会对高容量卡(SDHC/SDXC)再右移 9 位还原成块号。
+       原条件 (!= STD_CAPACITY_SD_CARD_V1_1) 会漏掉同样用字节寻址的 SDSC v1.1 卡，
+       导致寻址偏差 512 倍，故改为无条件左移。 */
+    lsaddr <<= 9;
 
     sta = sdmmc_read_blocks(pbuf, lsaddr, 512, cnt);
 			
@@ -1459,10 +1463,10 @@ uint8_t sd_write_disk(uint8_t *pbuf, uint32_t saddr, uint32_t cnt)
 					return SD_ERROR;
 			}
 		
-		//高容量SD卡（SDHC/SDXC，≥4GB）使用字节地址而非扇区地址，需要左移9位（乘以512）
-    if (CardType != STD_CAPACITY_SD_CARD_V1_1) lsaddr <<= 9;
+		//FatFs 传入 LBA 扇区号，下面统一左移 9 位(×512)换算成字节地址。寻址规范：标准容量卡(SDSC v1.1/v2.0,≤2GB)用字节地址、高容量卡(SDHC/SDXC,≥4GB)用块地址；下层 sdmmc_write_blocks 会对高容量卡再右移 9 位还原成块号。原条件 (!= STD_CAPACITY_SD_CARD_V1_1) 会漏掉 SDSC v1.1 卡，导致寻址偏差 512 倍，故改为无条件左移。
+    lsaddr <<= 9;
 
-    sta = sdmmc_write_blocks(pbuf, lsaddr, 512, cnt);/* 读取单个/多个sector */
+    sta = sdmmc_write_blocks(pbuf, lsaddr, 512, cnt);/* 写入单个/多个sector */
 			
 		xSemaphoreGive(g_sdio_mutex);/* 释放互斥锁 */
 
